@@ -246,6 +246,7 @@ def main():
     # Lookahead slider for good trade evaluation
     lookahead = st.slider("Lookahead (trading days)", min_value=1, max_value=20, value=5,
                           help="Number of trading days to look ahead when judging good/bad trades")
+    st.caption(f"Buy before price rises / Sell before price drops within {lookahead} trading days = 👍 Good Trade")
 
     # Filter trades by selected ETFs
     filtered_trades = ticker_trades[ticker_trades["ETF"].isin(active_etfs)]

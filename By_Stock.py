@@ -165,8 +165,8 @@ def build_chart(ticker, company_name, prices, trades, lookahead=5):
                 x=tx, y=ty, text="👍",
                 showarrow=False,
                 font=dict(size=16),
-                xshift=25, yshift=20,
-                textangle=-40,
+                xshift=18, yshift=14,
+                textangle=-30,
                 xref="x", yref="y",
             )
 

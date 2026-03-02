@@ -159,17 +159,16 @@ def build_chart(ticker, company_name, prices, trades, lookahead=5):
             name=direction,
         ), row=1, col=1)
 
-        # 👍 next to good trades
-        if thumb_xs:
-            fig.add_trace(go.Scatter(
-                x=thumb_xs, y=thumb_ys,
-                mode="text",
-                text=["👍"] * len(thumb_xs),
-                textfont=dict(size=14),
-                textposition="middle right",
-                hoverinfo="skip",
-                showlegend=False,
-            ), row=1, col=1)
+        # 👍 at top-right of good trades, tilted 40° right
+        for tx, ty in zip(thumb_xs, thumb_ys):
+            fig.add_annotation(
+                x=tx, y=ty, text="👍",
+                showarrow=False,
+                font=dict(size=16),
+                xshift=25, yshift=20,
+                textangle=-40,
+                xref="x", yref="y",
+            )
 
     # ── Layout ───────────────────────────────────────────────────────
     fig.update_layout(

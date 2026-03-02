@@ -92,24 +92,22 @@ def build_etf_chart(etf: str, prices: pd.DataFrame, trades: pd.DataFrame):
             name=f"MA{period}", hoverinfo="skip",
         ), row=1, col=1)
 
-    # ── 3. Invisible scatter for trade-detail hover ──────────────────
+    # ── 3. Full-width invisible trace for trade-detail hover ─────────
     hover_texts = build_daily_hover(trades, prices.index)
-    # Only add hover points on days that have trades
-    hx, hy, ht = [], [], []
+    # Show date for no-trade days, trade details for trade days
+    full_hover = []
     for i, txt in enumerate(hover_texts):
         if txt:
-            hx.append(prices.index[i])
-            hy.append(prices["Close"].iloc[i])
-            ht.append(txt)
+            full_hover.append(txt)
+        else:
+            full_hover.append(f"{prices.index[i].strftime('%Y-%m-%d')}<br>No trades")
 
-    if hx:
-        fig.add_trace(go.Scatter(
-            x=hx, y=hy,
-            mode="markers",
-            marker=dict(size=8, color="rgba(255,255,255,0.15)", symbol="circle"),
-            hovertext=ht, hoverinfo="text",
-            name="Trades",
-        ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=prices.index, y=prices["Close"],
+        mode="lines", line=dict(width=0, color="rgba(0,0,0,0)"),
+        hovertext=full_hover, hoverinfo="text",
+        name="Trades", showlegend=False,
+    ), row=1, col=1)
 
     # ── 4. Volume ────────────────────────────────────────────────────
     vol_colors = [
@@ -128,7 +126,7 @@ def build_etf_chart(etf: str, prices: pd.DataFrame, trades: pd.DataFrame):
         paper_bgcolor=BG_COLOR,
         plot_bgcolor=BG_COLOR,
         title=dict(text=f"{etf} — K-Line & Daily Trades", font=dict(size=18)),
-        hovermode="closest",
+        hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(l=50, r=20, t=50, b=30),
         height=660,

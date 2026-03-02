@@ -1,15 +1,46 @@
-"""ARK Trades Visualization — stock prices with buy/sell markers."""
+"""ARK Trades Visualization — K-line chart with buy/sell markers."""
 
 import os
+
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TRADES_FILE = os.path.join(DATA_DIR, "ark_trades_summary.xlsx")
 PRICES_DIR = os.path.join(DATA_DIR, "prices")
 
+# Custom SVG marker paths
+TEARDROP = (
+    "path://M0,-1.5 C0.5,-0.5 1,0 1,0.5 "
+    "C1,1.1 0.5,1.5 0,1.5 "
+    "C-0.5,1.5 -1,1.1 -1,0.5 "
+    "C-1,0 -0.5,-0.5 0,-1.5Z"
+)
+HEART = (
+    "path://M0,0.9 C-0.4,0.5 -1,0 -1,-0.4 "
+    "C-1,-0.8 -0.65,-1.05 -0.35,-1.05 "
+    "C-0.1,-1.05 0,-0.85 0,-0.7 "
+    "C0,-0.85 0.1,-1.05 0.35,-1.05 "
+    "C0.65,-1.05 1,-0.8 1,-0.4 "
+    "C1,0 0.4,0.5 0,0.9Z"
+)
+
+BG_COLOR = "#0E1117"
+
+MA_PERIODS = {8: "#F39C12", 13: "#E74C3C", 21: "#3498DB", 34: "#9B59B6"}
+
 st.set_page_config(page_title="ARK Trades", page_icon="📈", layout="wide")
+
+
+def format_shares(n):
+    """Format share count: 32000 → '32K', 112 → '112'."""
+    if n >= 1000:
+        v = n / 1000
+        return f"{v:.0f}K" if v >= 100 or v == int(v) else f"{v:.1f}K"
+    return str(int(n))
 
 
 @st.cache_data
@@ -25,79 +56,135 @@ def load_prices(ticker: str):
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path, index_col=0, parse_dates=True)
-    # Flatten multi-level columns if present
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
 
 
-def build_chart(ticker: str, prices: pd.DataFrame, trades: pd.DataFrame):
-    fig = go.Figure()
-
-    # Price line
-    fig.add_trace(
-        go.Scatter(
-            x=prices.index,
-            y=prices["Close"],
-            mode="lines",
-            name="Close",
-            line=dict(color="#636EFA", width=1.5),
-            hovertemplate="%{x|%Y-%m-%d}<br>$%{y:.2f}<extra></extra>",
-        )
+def build_chart(ticker, company_name, prices, trades):
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[0.8, 0.2], vertical_spacing=0.03,
     )
 
-    # Buy/Sell markers — match trade dates to nearest price date
-    for direction, color, symbol, label in [
-        ("Buy", "#2CA02C", "triangle-up", "Buy"),
-        ("Sell", "#D62728", "triangle-down", "Sell"),
+    # ── 1. Candlestick ──────────────────────────────────────────────
+    fig.add_trace(go.Candlestick(
+        x=prices.index,
+        open=prices["Open"], high=prices["High"],
+        low=prices["Low"], close=prices["Close"],
+        increasing=dict(line=dict(color="#2ECC71"), fillcolor="#2ECC71"),
+        decreasing=dict(line=dict(color="#E8E8E8"), fillcolor=BG_COLOR),
+        name="K-line",
+    ), row=1, col=1)
+
+    # ── 2. Moving Averages ───────────────────────────────────────────
+    for period, color in MA_PERIODS.items():
+        ma = prices["Close"].rolling(period).mean()
+        fig.add_trace(go.Scatter(
+            x=prices.index, y=ma, mode="lines",
+            line=dict(width=1, color=color),
+            name=f"MA{period}", hoverinfo="skip",
+        ), row=1, col=1)
+
+    # ── 3. Volume ────────────────────────────────────────────────────
+    vol_colors = [
+        "#2ECC71" if c >= o else "#888888"
+        for c, o in zip(prices["Close"], prices["Open"])
+    ]
+    fig.add_trace(go.Bar(
+        x=prices.index, y=prices["Volume"],
+        marker_color=vol_colors, name="Volume",
+        hovertemplate="%{x|%Y-%m-%d}<br>Volume: %{y:,.0f}<extra></extra>",
+    ), row=2, col=1)
+
+    # ── 4. Buy / Sell markers ────────────────────────────────────────
+    price_range = prices["High"].max() - prices["Low"].min()
+    offset_unit = price_range * 0.04
+
+    all_shares = trades["Shares Traded"].values.astype(float)
+    if len(all_shares) > 0:
+        log_min = np.log1p(all_shares).min()
+        log_max = np.log1p(all_shares).max()
+    else:
+        log_min, log_max = 0, 1
+
+    for direction, svg, fill_color in [
+        ("Buy",  TEARDROP, "rgba(46,204,113,0.88)"),
+        ("Sell", HEART,    "rgba(240,100,120,0.88)"),
     ]:
-        mask = trades["Direction"] == direction
-        dir_trades = trades[mask].copy()
+        dir_trades = trades[trades["Direction"] == direction]
         if dir_trades.empty:
             continue
 
-        # For each trade date, find the closest price date
-        marker_dates = []
-        marker_prices = []
-        hover_texts = []
+        xs, ys, labels, sizes, hovers = [], [], [], [], []
+        date_stack: dict[tuple, int] = {}
+
         for _, row in dir_trades.iterrows():
             trade_date = row["Date"]
-            # Find closest available price date
             idx = prices.index.searchsorted(trade_date)
             if idx >= len(prices):
                 idx = len(prices) - 1
-            price_date = prices.index[idx]
-            marker_dates.append(price_date)
-            marker_prices.append(prices.loc[price_date, "Close"])
-            hover_texts.append(
+            pd_date = prices.index[idx]
+
+            # stacking offset for multiple trades on same date
+            key = (pd_date, direction)
+            date_stack[key] = date_stack.get(key, 0) + 1
+            stack_n = date_stack[key]
+
+            if direction == "Buy":
+                y = prices.loc[pd_date, "Low"] - offset_unit * stack_n
+            else:
+                y = prices.loc[pd_date, "High"] + offset_unit * stack_n
+
+            xs.append(pd_date)
+            ys.append(y)
+
+            shares = row["Shares Traded"]
+            labels.append(f"{'Buy' if direction == 'Buy' else 'Sell'}<br>{format_shares(shares)}")
+
+            # size proportional to log(shares)
+            norm = (np.log1p(float(shares)) - log_min) / (log_max - log_min + 1e-9)
+            sizes.append(30 + 28 * norm)
+
+            hovers.append(
                 f"<b>{direction}</b><br>"
+                f"Ticker: {ticker} ({company_name})<br>"
                 f"Date: {trade_date.strftime('%Y-%m-%d')}<br>"
                 f"ETF: {row['ETF']}<br>"
                 f"Shares: {row['Shares Traded']:,.0f}<br>"
                 f"% of ETF: {row['% of Total ETF']:.4f}"
             )
 
-        fig.add_trace(
-            go.Scatter(
-                x=marker_dates,
-                y=marker_prices,
-                mode="markers",
-                name=label,
-                marker=dict(symbol=symbol, size=11, color=color, line=dict(width=1, color="white")),
-                hovertemplate="%{text}<extra></extra>",
-                text=hover_texts,
-            )
-        )
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys,
+            mode="markers+text",
+            marker=dict(symbol=svg, size=sizes, color=fill_color, line=dict(width=0)),
+            text=labels,
+            textfont=dict(color="white", size=8, family="Arial"),
+            textposition="middle center",
+            hovertext=hovers, hoverinfo="text",
+            name=direction,
+        ), row=1, col=1)
 
+    # ── Layout ───────────────────────────────────────────────────────
     fig.update_layout(
-        title=f"{ticker} — Price & ARK Trades",
-        xaxis_title="Date",
-        yaxis_title="Price (USD)",
+        template="plotly_dark",
+        paper_bgcolor=BG_COLOR,
+        plot_bgcolor=BG_COLOR,
+        title=dict(text=f"{ticker} — {company_name}", font=dict(size=18)),
         hovermode="closest",
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=40, r=20, t=60, b=40),
-        height=550,
+        margin=dict(l=50, r=20, t=50, b=30),
+        height=660,
+        xaxis_rangeslider_visible=False,
+        xaxis2_rangeslider_visible=True,
+        xaxis2_rangeslider_thickness=0.06,
     )
+
+    grid_color = "rgba(255,255,255,0.07)"
+    fig.update_yaxes(gridcolor=grid_color)
+    fig.update_xaxes(gridcolor=grid_color)
+
     return fig
 
 
@@ -106,14 +193,12 @@ def main():
 
     trades = load_trades()
 
-    # Build ticker → company name mapping
     ticker_company = (
         trades.drop_duplicates("Ticker")[["Ticker", "Company Name"]]
         .set_index("Ticker")["Company Name"]
         .to_dict()
     )
 
-    # Only show tickers that have price data
     available = sorted(
         t for t in ticker_company if os.path.exists(os.path.join(PRICES_DIR, f"{t}.csv"))
     )
@@ -122,13 +207,12 @@ def main():
         st.error("No price data found. Run `python fetch_prices.py` first.")
         return
 
-    # Sidebar — ticker selector
-    st.sidebar.header("Select Stock")
+    # Ticker selector on main page
     options = [f"{t} — {ticker_company[t]}" for t in available]
-    selection = st.sidebar.selectbox("Ticker", options, index=0)
+    selection = st.selectbox("Select Stock", options, index=0)
     ticker = selection.split(" — ")[0]
+    company_name = ticker_company[ticker]
 
-    # Load data
     prices = load_prices(ticker)
     if prices is None or prices.empty:
         st.warning(f"No price data for {ticker}.")
@@ -136,8 +220,7 @@ def main():
 
     ticker_trades = trades[trades["Ticker"] == ticker].sort_values("Date")
 
-    # Chart
-    fig = build_chart(ticker, prices, ticker_trades)
+    fig = build_chart(ticker, company_name, prices, ticker_trades)
     st.plotly_chart(fig, use_container_width=True)
 
     # Trade table

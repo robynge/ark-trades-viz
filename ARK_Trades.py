@@ -13,6 +13,7 @@ TRADES_FILE = os.path.join(DATA_DIR, "ark_trades_summary.xlsx")
 PRICES_DIR = os.path.join(DATA_DIR, "prices")
 
 BG_COLOR = "#0E1117"
+ARK_ETFS = ["ARKK", "ARKQ", "ARKW", "ARKG", "ARKF", "ARKX"]
 
 MA_PERIODS = {8: "#F39C12", 13: "#E74C3C", 21: "#3498DB", 34: "#9B59B6"}
 
@@ -204,12 +205,26 @@ def main():
 
     ticker_trades = trades[trades["Ticker"] == ticker].sort_values("Date")
 
-    fig = build_chart(ticker, company_name, prices, ticker_trades)
+    # ETF toggle buttons
+    etfs_with_trades = set(ticker_trades["ETF"].unique())
+    cols = st.columns(len(ARK_ETFS))
+    active_etfs = []
+    for i, etf in enumerate(ARK_ETFS):
+        has_trades = etf in etfs_with_trades
+        with cols[i]:
+            on = st.toggle(etf, value=has_trades, disabled=not has_trades)
+            if on:
+                active_etfs.append(etf)
+
+    # Filter trades by selected ETFs
+    filtered_trades = ticker_trades[ticker_trades["ETF"].isin(active_etfs)]
+
+    fig = build_chart(ticker, company_name, prices, filtered_trades)
     st.plotly_chart(fig, use_container_width=True)
 
     # Trade table
-    st.subheader(f"Trade History ({len(ticker_trades)} trades)")
-    display_df = ticker_trades[["Date", "ETF", "Direction", "Shares Traded", "% of Total ETF"]].copy()
+    st.subheader(f"Trade History ({len(filtered_trades)} trades)")
+    display_df = filtered_trades[["Date", "ETF", "Direction", "Shares Traded", "% of Total ETF"]].copy()
     display_df["Date"] = display_df["Date"].dt.strftime("%Y-%m-%d")
     display_df["Shares Traded"] = display_df["Shares Traded"].apply(lambda x: f"{x:,.0f}")
     display_df["% of Total ETF"] = display_df["% of Total ETF"].apply(lambda x: f"{x:.4f}")

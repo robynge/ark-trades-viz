@@ -159,7 +159,7 @@ def main():
     etf_trades = trades[trades["ETF"] == etf].sort_values("Date")
 
     fig = build_etf_chart(etf, prices, etf_trades)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # Trade summary table for the selected ETF
     st.subheader(f"{etf} Trade History ({len(etf_trades)} trades)")
@@ -167,7 +167,7 @@ def main():
     display_df["Date"] = display_df["Date"].dt.strftime("%Y-%m-%d")
     display_df["Shares Traded"] = display_df["Shares Traded"].apply(lambda x: f"{x:,.0f}")
     display_df["% of Total ETF"] = display_df["% of Total ETF"].apply(lambda x: f"{x:.4f}")
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.dataframe(display_df, width="stretch", hide_index=True)
 
 
 if __name__ == "__main__":

@@ -170,6 +170,14 @@ def build_chart(ticker, company_name, prices, trades, lookahead=5):
                 xref="x", yref="y",
             )
 
+    # ── 👍 legend entry ────────────────────────────────────────────────
+    fig.add_trace(go.Scatter(
+        x=[None], y=[None], mode="markers",
+        marker=dict(size=0, color="rgba(0,0,0,0)"),
+        name="👍 Good Trade",
+        showlegend=True,
+    ), row=1, col=1)
+
     # ── Layout ───────────────────────────────────────────────────────
     fig.update_layout(
         template="plotly_dark",

@@ -45,7 +45,19 @@ def load_prices(ticker: str):
     return df
 
 
-def build_chart(ticker, company_name, prices, trades):
+def is_good_trade(direction, price_idx, prices, lookahead=5):
+    """Check if trade was good: Buy before rise or Sell before drop."""
+    future_idx = min(price_idx + lookahead, len(prices) - 1)
+    if future_idx <= price_idx:
+        return False
+    trade_price = prices["Close"].iloc[price_idx]
+    future_price = prices["Close"].iloc[future_idx]
+    if direction == "Buy":
+        return future_price > trade_price
+    return future_price < trade_price
+
+
+def build_chart(ticker, company_name, prices, trades, lookahead=5):
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         row_heights=[0.8, 0.2], vertical_spacing=0.03,
@@ -81,7 +93,7 @@ def build_chart(ticker, company_name, prices, trades):
         hovertemplate="%{x|%Y-%m-%d}<br>Volume: %{y:,.0f}<extra></extra>",
     ), row=2, col=1)
 
-    # ── 4. Buy / Sell markers ────────────────────────────────────────
+    # ── 4. Buy / Sell markers + thumbs up ────────────────────────────
     price_range = prices["High"].max() - prices["Low"].min()
     offset_unit = price_range * 0.04
 
@@ -94,6 +106,7 @@ def build_chart(ticker, company_name, prices, trades):
             continue
 
         xs, ys, labels, hovers = [], [], [], []
+        thumb_xs, thumb_ys = [], []
         date_stack: dict[tuple, int] = {}
 
         for _, row in dir_trades.iterrows():
@@ -119,14 +132,21 @@ def build_chart(ticker, company_name, prices, trades):
             shares = row["Shares Traded"]
             labels.append(f"{'Buy' if direction == 'Buy' else 'Sell'}<br>{format_shares(shares)}")
 
+            good = is_good_trade(direction, idx, prices, lookahead)
+            verdict = "Good" if good else "Bad"
+
             hovers.append(
-                f"<b>{direction}</b><br>"
+                f"<b>{direction}</b> ({verdict})<br>"
                 f"Ticker: {ticker} ({company_name})<br>"
                 f"Date: {trade_date.strftime('%Y-%m-%d')}<br>"
                 f"ETF: {row['ETF']}<br>"
                 f"Shares: {row['Shares Traded']:,.0f}<br>"
                 f"% of ETF: {row['% of Total ETF']:.4f}"
             )
+
+            if good:
+                thumb_xs.append(pd_date)
+                thumb_ys.append(y)
 
         fig.add_trace(go.Scatter(
             x=xs, y=ys,
@@ -138,6 +158,18 @@ def build_chart(ticker, company_name, prices, trades):
             hovertext=hovers, hoverinfo="text",
             name=direction,
         ), row=1, col=1)
+
+        # 👍 next to good trades
+        if thumb_xs:
+            fig.add_trace(go.Scatter(
+                x=thumb_xs, y=thumb_ys,
+                mode="text",
+                text=["👍"] * len(thumb_xs),
+                textfont=dict(size=14),
+                textposition="middle right",
+                hoverinfo="skip",
+                showlegend=False,
+            ), row=1, col=1)
 
     # ── Layout ───────────────────────────────────────────────────────
     fig.update_layout(
@@ -204,10 +236,14 @@ def main():
             if on:
                 active_etfs.append(etf)
 
+    # Lookahead slider for good trade evaluation
+    lookahead = st.slider("Lookahead (trading days)", min_value=1, max_value=20, value=5,
+                          help="Number of trading days to look ahead when judging good/bad trades")
+
     # Filter trades by selected ETFs
     filtered_trades = ticker_trades[ticker_trades["ETF"].isin(active_etfs)]
 
-    fig = build_chart(ticker, company_name, prices, filtered_trades)
+    fig = build_chart(ticker, company_name, prices, filtered_trades, lookahead=lookahead)
     st.plotly_chart(fig, use_container_width=True)
 
     # Trade table

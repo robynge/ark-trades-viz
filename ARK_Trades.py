@@ -131,7 +131,7 @@ def build_chart(ticker, company_name, prices, trades):
         fig.add_trace(go.Scatter(
             x=xs, y=ys,
             mode="markers+text",
-            marker=dict(symbol=marker_sym, size=28, color=fill_color, line=dict(width=1, color="white")),
+            marker=dict(symbol=marker_sym, size=42, color=fill_color, line=dict(width=1, color="white")),
             text=labels,
             textfont=dict(color="white", size=8, family="Arial"),
             textposition="middle center",

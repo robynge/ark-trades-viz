@@ -12,22 +12,6 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 TRADES_FILE = os.path.join(DATA_DIR, "ark_trades_summary.xlsx")
 PRICES_DIR = os.path.join(DATA_DIR, "prices")
 
-# Custom SVG marker paths
-TEARDROP = (
-    "path://M0,-1.5 C0.5,-0.5 1,0 1,0.5 "
-    "C1,1.1 0.5,1.5 0,1.5 "
-    "C-0.5,1.5 -1,1.1 -1,0.5 "
-    "C-1,0 -0.5,-0.5 0,-1.5Z"
-)
-HEART = (
-    "path://M0,0.9 C-0.4,0.5 -1,0 -1,-0.4 "
-    "C-1,-0.8 -0.65,-1.05 -0.35,-1.05 "
-    "C-0.1,-1.05 0,-0.85 0,-0.7 "
-    "C0,-0.85 0.1,-1.05 0.35,-1.05 "
-    "C0.65,-1.05 1,-0.8 1,-0.4 "
-    "C1,0 0.4,0.5 0,0.9Z"
-)
-
 BG_COLOR = "#0E1117"
 
 MA_PERIODS = {8: "#F39C12", 13: "#E74C3C", 21: "#3498DB", 34: "#9B59B6"}
@@ -108,9 +92,9 @@ def build_chart(ticker, company_name, prices, trades):
     else:
         log_min, log_max = 0, 1
 
-    for direction, svg, fill_color in [
-        ("Buy",  TEARDROP, "rgba(46,204,113,0.88)"),
-        ("Sell", HEART,    "rgba(240,100,120,0.88)"),
+    for direction, marker_sym, fill_color in [
+        ("Buy",  "triangle-up",   "rgba(46,204,113,0.85)"),
+        ("Sell", "triangle-down", "rgba(240,100,120,0.85)"),
     ]:
         dir_trades = trades[trades["Direction"] == direction]
         if dir_trades.empty:
@@ -158,7 +142,7 @@ def build_chart(ticker, company_name, prices, trades):
         fig.add_trace(go.Scatter(
             x=xs, y=ys,
             mode="markers+text",
-            marker=dict(symbol=svg, size=sizes, color=fill_color, line=dict(width=0)),
+            marker=dict(symbol=marker_sym, size=sizes, color=fill_color, line=dict(width=1, color="white")),
             text=labels,
             textfont=dict(color="white", size=8, family="Arial"),
             textposition="middle center",

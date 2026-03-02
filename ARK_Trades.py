@@ -2,7 +2,6 @@
 
 import os
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -86,13 +85,6 @@ def build_chart(ticker, company_name, prices, trades):
     price_range = prices["High"].max() - prices["Low"].min()
     offset_unit = price_range * 0.04
 
-    all_shares = trades["Shares Traded"].values.astype(float)
-    if len(all_shares) > 0:
-        log_min = np.log1p(all_shares).min()
-        log_max = np.log1p(all_shares).max()
-    else:
-        log_min, log_max = 0, 1
-
     for direction, marker_sym, fill_color in [
         ("Buy",  "triangle-up",   "rgba(46,204,113,0.85)"),
         ("Sell", "triangle-down", "rgba(240,100,120,0.85)"),
@@ -101,7 +93,7 @@ def build_chart(ticker, company_name, prices, trades):
         if dir_trades.empty:
             continue
 
-        xs, ys, labels, sizes, hovers = [], [], [], [], []
+        xs, ys, labels, hovers = [], [], [], []
         date_stack: dict[tuple, int] = {}
 
         for _, row in dir_trades.iterrows():
@@ -127,10 +119,6 @@ def build_chart(ticker, company_name, prices, trades):
             shares = row["Shares Traded"]
             labels.append(f"{'Buy' if direction == 'Buy' else 'Sell'}<br>{format_shares(shares)}")
 
-            # size proportional to log(shares)
-            norm = (np.log1p(float(shares)) - log_min) / (log_max - log_min + 1e-9)
-            sizes.append(30 + 28 * norm)
-
             hovers.append(
                 f"<b>{direction}</b><br>"
                 f"Ticker: {ticker} ({company_name})<br>"
@@ -143,7 +131,7 @@ def build_chart(ticker, company_name, prices, trades):
         fig.add_trace(go.Scatter(
             x=xs, y=ys,
             mode="markers+text",
-            marker=dict(symbol=marker_sym, size=sizes, color=fill_color, line=dict(width=1, color="white")),
+            marker=dict(symbol=marker_sym, size=12, color=fill_color, line=dict(width=1, color="white")),
             text=labels,
             textfont=dict(color="white", size=8, family="Arial"),
             textposition="middle center",

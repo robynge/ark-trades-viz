@@ -95,7 +95,7 @@ def build_chart(ticker, company_name, prices, trades, lookahead=5):
 
     # ── 4. Buy / Sell markers + thumbs up ────────────────────────────
     price_range = prices["High"].max() - prices["Low"].min()
-    offset_unit = price_range * 0.04
+    offset_unit = price_range * 0.10
 
     for direction, marker_sym, fill_color in [
         ("Buy",  "triangle-up",   "rgba(46,204,113,0.85)"),
